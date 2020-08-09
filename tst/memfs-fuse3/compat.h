@@ -1,7 +1,7 @@
 /**
  * @file compat.h
  *
- * @copyright 2015-2019 Bill Zissimopoulos
+ * @copyright 2019-2020 Bill Zissimopoulos
  */
 /*
  * This file is part of WinFuse.
@@ -30,6 +30,8 @@
 #endif
 
 #if !defined(_WIN32) && !defined(fuse_stat)
+
+typedef uint64_t fuse_ino_t;
 
 #define fuse_uid_t                      uid_t
 #define fuse_gid_t                      gid_t

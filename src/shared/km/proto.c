@@ -1,7 +1,7 @@
 /**
- * @file winfuse/proto.c
+ * @file shared/km/proto.c
  *
- * @copyright 2019 Bill Zissimopoulos
+ * @copyright 2019-2020 Bill Zissimopoulos
  */
 /*
  * This file is part of WinFuse.
@@ -19,12 +19,14 @@
  * associated repository.
  */
 
-#include <winfuse/driver.h>
+#include <shared/km/shared.h>
 
-NTSTATUS FuseProtoPostInit(PDEVICE_OBJECT DeviceObject);
+NTSTATUS FuseProtoPostInit(FUSE_INSTANCE *Instance);
 VOID FuseProtoSendInit(FUSE_CONTEXT *Context);
+NTSTATUS FuseProtoPostDestroy(FUSE_INSTANCE *Instance);
+VOID FuseProtoSendDestroy(FUSE_CONTEXT *Context);
 VOID FuseProtoSendLookup(FUSE_CONTEXT *Context);
-NTSTATUS FuseProtoPostForget(PDEVICE_OBJECT DeviceObject, PLIST_ENTRY ForgetList);
+NTSTATUS FuseProtoPostForget(FUSE_INSTANCE *Instance, PLIST_ENTRY ForgetList);
 static VOID FuseProtoPostForget_ContextFini(FUSE_CONTEXT *Context);
 VOID FuseProtoFillForget(FUSE_CONTEXT *Context);
 VOID FuseProtoFillBatchForget(FUSE_CONTEXT *Context);
@@ -50,13 +52,15 @@ VOID FuseProtoSendRead(FUSE_CONTEXT *Context);
 VOID FuseProtoSendWrite(FUSE_CONTEXT *Context);
 VOID FuseProtoSendFsyncdir(FUSE_CONTEXT *Context);
 VOID FuseProtoSendFsync(FUSE_CONTEXT *Context);
-VOID FuseAttrToFileInfo(PDEVICE_OBJECT DeviceObject,
+VOID FuseAttrToFileInfo(FUSE_INSTANCE *Instance,
     FUSE_PROTO_ATTR *Attr, FSP_FSCTL_FILE_INFO *FileInfo);
-NTSTATUS FuseNtStatusFromErrno(INT32 Errno);
+NTSTATUS FuseNtStatusFromErrno(FUSE_INSTANCE_TYPE InstanceType, INT32 Errno);
 
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text(PAGE, FuseProtoPostInit)
 #pragma alloc_text(PAGE, FuseProtoSendInit)
+#pragma alloc_text(PAGE, FuseProtoPostDestroy)
+#pragma alloc_text(PAGE, FuseProtoSendDestroy)
 #pragma alloc_text(PAGE, FuseProtoSendLookup)
 #pragma alloc_text(PAGE, FuseProtoPostForget)
 #pragma alloc_text(PAGE, FuseProtoPostForget_ContextFini)
@@ -94,13 +98,14 @@ NTSTATUS FuseNtStatusFromErrno(INT32 Errno);
         FuseContextWaitRequest(Context);
 #define FUSE_PROTO_SEND_END             \
         FuseContextWaitResponse(Context);\
-        Context->InternalResponse->IoStatus.Status =\
-            FuseNtStatusFromErrno(Context->FuseResponse->error);\
+        Context->InternalResponse->IoStatus.Status = 0 == Context->FuseResponse->error ?\
+            STATUS_SUCCESS :\
+            FuseNtStatusFromErrno(Context->Instance->InstanceType, Context->FuseResponse->error);\
     }
 #define FUSE_PROTO_SEND_BEGIN_(OPCODE)  \
     coro_block(Context->CoroState)      \
     {                                   \
-        if (FuseOpcodeENOSYS(Context->DeviceObject, FUSE_PROTO_OPCODE_ ## OPCODE))\
+        if (FuseInstanceGetOpcodeENOSYS(Context->Instance, FUSE_PROTO_OPCODE_ ## OPCODE))\
         {                               \
             Context->InternalResponse->IoStatus.Status = (UINT32)STATUS_INVALID_DEVICE_REQUEST;\
             coro_break;                 \
@@ -108,10 +113,11 @@ NTSTATUS FuseNtStatusFromErrno(INT32 Errno);
         FuseContextWaitRequest(Context);
 #define FUSE_PROTO_SEND_END_(OPCODE)    \
         FuseContextWaitResponse(Context);\
-        Context->InternalResponse->IoStatus.Status =\
-            FuseNtStatusFromErrno(Context->FuseResponse->error);\
+        Context->InternalResponse->IoStatus.Status = 0 == Context->FuseResponse->error ?\
+            STATUS_SUCCESS :\
+            FuseNtStatusFromErrno(Context->Instance->InstanceType, Context->FuseResponse->error);\
         if (STATUS_INVALID_DEVICE_REQUEST == Context->InternalResponse->IoStatus.Status)\
-            FuseOpcodeSetENOSYS(Context->DeviceObject, FUSE_PROTO_OPCODE_ ## OPCODE);\
+            FuseInstanceSetOpcodeENOSYS(Context->Instance, FUSE_PROTO_OPCODE_ ## OPCODE);\
     }
 
 static inline VOID FuseProtoInitRequest(FUSE_CONTEXT *Context,
@@ -126,20 +132,20 @@ static inline VOID FuseProtoInitRequest(FUSE_CONTEXT *Context,
     Context->FuseRequest->pid = Context->OrigPid;
 }
 
-NTSTATUS FuseProtoPostInit(PDEVICE_OBJECT DeviceObject)
+NTSTATUS FuseProtoPostInit(FUSE_INSTANCE *Instance)
 {
     PAGED_CODE();
 
     FUSE_CONTEXT *Context;
 
-    FuseContextCreate(&Context, DeviceObject, 0);
+    FuseContextCreate(&Context, Instance, 0);
     ASSERT(0 != Context);
     if (FuseContextIsStatus(Context))
         return FuseContextToStatus(Context);
 
     Context->InternalResponse->Hint = FUSE_PROTO_OPCODE_INIT;
 
-    FuseIoqPostPending(FuseDeviceExtension(DeviceObject)->Ioq, Context);
+    FuseIoqPostPending(Instance->Ioq, Context);
 
     return STATUS_SUCCESS;
 }
@@ -159,6 +165,42 @@ VOID FuseProtoSendInit(FUSE_CONTEXT *Context)
         Context->FuseRequest->req.init.minor = FUSE_PROTO_MINOR_VERSION;
         Context->FuseRequest->req.init.max_readahead = 0;   /* !!!: REVISIT */
         Context->FuseRequest->req.init.flags = 0;           /* !!!: REVISIT */
+
+    FUSE_PROTO_SEND_END
+}
+
+NTSTATUS FuseProtoPostDestroy(FUSE_INSTANCE *Instance)
+{
+    PAGED_CODE();
+
+    FUSE_CONTEXT *Context;
+
+    FuseContextCreate(&Context, Instance, 0);
+    ASSERT(0 != Context);
+    if (FuseContextIsStatus(Context))
+        return FuseContextToStatus(Context);
+
+    Context->InternalResponse->Hint = FUSE_PROTO_OPCODE_DESTROY;
+
+    FuseIoqPostPendingAndStop(Instance->Ioq, Context);
+
+    return STATUS_SUCCESS;
+}
+
+VOID FuseProtoSendDestroy(FUSE_CONTEXT *Context)
+    /*
+     * Send DESTROY message.
+     */
+{
+    PAGED_CODE();
+
+    FUSE_PROTO_SEND_BEGIN
+
+        FuseProtoInitRequest(Context,
+            FUSE_PROTO_REQ_HEADER_SIZE, FUSE_PROTO_OPCODE_DESTROY, 0);
+
+        if (0 != Context->Instance->ProtoSendDestroyHandler)
+            Context->Instance->ProtoSendDestroyHandler(Context->Instance->ProtoSendDestroyData);
 
     FUSE_PROTO_SEND_END
 }
@@ -188,13 +230,13 @@ VOID FuseProtoSendLookup(FUSE_CONTEXT *Context)
     FUSE_PROTO_SEND_END
 }
 
-NTSTATUS FuseProtoPostForget(PDEVICE_OBJECT DeviceObject, PLIST_ENTRY ForgetList)
+NTSTATUS FuseProtoPostForget(FUSE_INSTANCE *Instance, PLIST_ENTRY ForgetList)
 {
     PAGED_CODE();
 
     FUSE_CONTEXT *Context;
 
-    FuseContextCreate(&Context, DeviceObject, 0);
+    FuseContextCreate(&Context, Instance, 0);
     ASSERT(0 != Context);
     if (FuseContextIsStatus(Context))
         return FuseContextToStatus(Context);
@@ -208,7 +250,7 @@ NTSTATUS FuseProtoPostForget(PDEVICE_OBJECT DeviceObject, PLIST_ENTRY ForgetList
     Context->Forget.ForgetList.Flink->Blink = &Context->Forget.ForgetList;
     Context->Forget.ForgetList.Blink->Flink = &Context->Forget.ForgetList;
 
-    FuseIoqPostPending(FuseDeviceExtension(DeviceObject)->Ioq, Context);
+    FuseIoqPostPending(Instance->Ioq, Context);
 
     return STATUS_SUCCESS;
 }
@@ -902,16 +944,15 @@ VOID FuseProtoSendFsync(FUSE_CONTEXT *Context)
     FUSE_PROTO_SEND_END_(FSYNC)
 }
 
-VOID FuseAttrToFileInfo(PDEVICE_OBJECT DeviceObject,
+VOID FuseAttrToFileInfo(FUSE_INSTANCE *Instance,
     FUSE_PROTO_ATTR *Attr, FSP_FSCTL_FILE_INFO *FileInfo)
 {
     PAGED_CODE();
 
-    FUSE_DEVICE_EXTENSION *DeviceExtension = FuseDeviceExtension(DeviceObject);
     UINT64 AllocationUnit;
 
-    AllocationUnit = (UINT64)DeviceExtension->VolumeParams->SectorSize *
-        (UINT64)DeviceExtension->VolumeParams->SectorsPerAllocationUnit;
+    AllocationUnit = (UINT64)Instance->VolumeParams->SectorSize *
+        (UINT64)Instance->VolumeParams->SectorsPerAllocationUnit;
 
     switch (Attr->mode & 0170000)
     {
@@ -949,19 +990,42 @@ VOID FuseAttrToFileInfo(PDEVICE_OBJECT DeviceObject,
     FileInfo->EaSize = 0;
 }
 
-NTSTATUS FuseNtStatusFromErrno(INT32 Errno)
+NTSTATUS FuseNtStatusFromErrno(FUSE_INSTANCE_TYPE InstanceType, INT32 Errno)
 {
     PAGED_CODE();
 
     if (0 > Errno)
         Errno = -Errno;
 
-    switch (Errno)
+    switch (InstanceType)
     {
-    #undef FUSE_ERRNO
-    #define FUSE_ERRNO 87
-    #include <winfuse/errno.i>
     default:
-        return STATUS_ACCESS_DENIED;
+    case FuseInstanceWindows:
+        switch (Errno)
+        {
+        #undef FUSE_ERRNO
+        #define FUSE_ERRNO 87
+        #include "errno.i"
+        default:
+            return STATUS_ACCESS_DENIED;
+        }
+    case FuseInstanceCygwin:
+        switch (Errno)
+        {
+        #undef FUSE_ERRNO
+        #define FUSE_ERRNO 67
+        #include "errno.i"
+        default:
+            return STATUS_ACCESS_DENIED;
+        }
+    case FuseInstanceLinux:
+        switch (Errno)
+        {
+        #undef FUSE_ERRNO
+        #define FUSE_ERRNO 76
+        #include "errno.i"
+        default:
+            return STATUS_ACCESS_DENIED;
+        }
     }
 }

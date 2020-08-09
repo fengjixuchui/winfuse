@@ -1,7 +1,7 @@
 /**
  * @file transact-test.c
  *
- * @copyright 2019 Bill Zissimopoulos
+ * @copyright 2019-2020 Bill Zissimopoulos
  */
 /*
  * This file is part of WinFuse.
@@ -23,7 +23,7 @@
 #include <tlib/testsuite.h>
 #include <process.h>
 #include <strsafe.h>
-#include <winfuse/proto.h>
+#include <shared/km/proto.h>
 
 #define FUSE_FSCTL_TRANSACT             \
     CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 0xC00 + 'F', METHOD_BUFFERED, FILE_ANY_ACCESS)

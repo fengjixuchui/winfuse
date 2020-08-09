@@ -6,14 +6,17 @@
       <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
     <Filter Include="Source\shared">
-      <UniqueIdentifier>{0311c80c-250c-4e98-9df9-0ebb43cf9bc9}</UniqueIdentifier>
+      <UniqueIdentifier>{b5f7a0e7-3a19-466c-ae52-9eb863760412}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\shared\km">
-      <UniqueIdentifier>{af536a30-2398-4512-bed3-c11be05975c5}</UniqueIdentifier>
+      <UniqueIdentifier>{677a3c82-e44a-4159-baf3-78ad02ace941}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\shared\ku">
+      <UniqueIdentifier>{712a52fa-6081-4712-a6ab-bc0418438fb8}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\src\winfuse\driver.c">
+    <ClCompile Include="..\..\src\wslfuse\driver.c">
       <Filter>Source</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\shared\km\debug.c">
@@ -43,7 +46,7 @@
     <ClCompile Include="..\..\src\shared\km\context.c">
       <Filter>Source\shared\km</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\winfuse\device.c">
+    <ClCompile Include="..\..\src\wslfuse\device.c">
       <Filter>Source</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\shared\km\instance.c">
@@ -51,11 +54,24 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\src\winfuse\driver.h">
+    <ResourceCompile Include="..\..\src\wslfuse\version.rc">
+      <Filter>Source</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="..\..\src\wslfuse\driver.inf.in">
+      <Filter>Source</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\src\wslfuse\driver.h">
       <Filter>Source</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\shared\km\shared.h">
       <Filter>Source\shared\km</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\shared\ku\wslfuse.h">
+      <Filter>Source\shared\ku</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\shared\km\coro.h">
       <Filter>Source\shared\km</Filter>
@@ -63,15 +79,5 @@
     <ClInclude Include="..\..\src\shared\km\proto.h">
       <Filter>Source\shared\km</Filter>
     </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <ResourceCompile Include="..\..\src\winfuse\version.rc">
-      <Filter>Source</Filter>
-    </ResourceCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <CustomBuild Include="..\..\src\winfuse\driver.inf.in">
-      <Filter>Source</Filter>
-    </CustomBuild>
   </ItemGroup>
 </Project>

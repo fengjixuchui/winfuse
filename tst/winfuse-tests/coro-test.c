@@ -1,7 +1,7 @@
 /**
  * @file coro-test.c
  *
- * @copyright 2019 Bill Zissimopoulos
+ * @copyright 2019-2020 Bill Zissimopoulos
  */
 /*
  * This file is part of WinFuse.
@@ -21,7 +21,7 @@
 
 #include <windows.h>
 #include <tlib/testsuite.h>
-#include <winfuse/coro.h>
+#include <shared/km/coro.h>
 
 static void bprintf(char **b, const char *format, ...)
 {

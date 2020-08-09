@@ -1,11 +1,11 @@
 /**
- * @file winfuse/proto.h
+ * @file shared/km/proto.h
  *
  * This file is derived from libfuse/include/fuse_kernel.h:
  *     FUSE: Filesystem in Userspace
  *     Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
  *
- * @copyright 2019 Bill Zissimopoulos
+ * @copyright 2019-2020 Bill Zissimopoulos
  */
 /*
  * This file is part of WinFuse.
@@ -23,8 +23,8 @@
  * associated repository.
  */
 
-#ifndef WINFUSE_PROTO_H_INCLUDED
-#define WINFUSE_PROTO_H_INCLUDED
+#ifndef SHARED_KM_PROTO_H_INCLUDED
+#define SHARED_KM_PROTO_H_INCLUDED
 
 #define FUSE_PROTO_VERSION              7
 #define FUSE_PROTO_MINOR_VERSION        29

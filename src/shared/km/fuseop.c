@@ -1,7 +1,7 @@
 /**
- * @file winfuse/fuseop.c
+ * @file shared/km/fuseop.c
  *
- * @copyright 2019 Bill Zissimopoulos
+ * @copyright 2019-2020 Bill Zissimopoulos
  */
 /*
  * This file is part of WinFuse.
@@ -19,7 +19,7 @@
  * associated repository.
  */
 
-#include <winfuse/driver.h>
+#include <shared/km/shared.h>
 
 static BOOLEAN FuseOpReserved_Init(FUSE_CONTEXT *Context);
 static BOOLEAN FuseOpReserved_Destroy(FUSE_CONTEXT *Context);
@@ -117,6 +117,7 @@ static VOID FuseSecurity_ContextFini(FUSE_CONTEXT *Context);
 #pragma alloc_text(PAGE, FuseOpWrite)
 #pragma alloc_text(PAGE, FuseOpQueryInformation)
 #pragma alloc_text(PAGE, FuseOpSetInformation_SetBasicInfo)
+#pragma alloc_text(PAGE, FuseOpSetInformation_SetAllocationSize)
 #pragma alloc_text(PAGE, FuseOpSetInformation_SetFileSize)
 #pragma alloc_text(PAGE, FuseOpSetInformation_SetDelete)
 #pragma alloc_text(PAGE, FuseOpSetInformation_Rename)
@@ -149,20 +150,20 @@ static BOOLEAN FuseOpReserved_Init(FUSE_CONTEXT *Context)
         if (!NT_SUCCESS(Context->InternalResponse->IoStatus.Status))
             coro_break;
 
-        FUSE_DEVICE_EXTENSION *DeviceExtension = FuseDeviceExtension(Context->DeviceObject);
+        FUSE_INSTANCE *Instance = Context->Instance;
         if (FUSE_PROTO_VERSION != Context->FuseResponse->rsp.init.major)
         {
-            DeviceExtension->VersionMajor = (UINT32)-1;
-            KeSetEvent(&DeviceExtension->InitEvent, 1, FALSE);
+            Instance->VersionMajor = (UINT32)-1;
+            KeSetEvent(&Instance->InitEvent, 1, FALSE);
 
             Context->InternalResponse->IoStatus.Status = (UINT32)STATUS_CONNECTION_REFUSED;
             coro_break;
         }
 
-        DeviceExtension->VersionMajor = Context->FuseResponse->rsp.init.major;
-        DeviceExtension->VersionMinor = Context->FuseResponse->rsp.init.minor;
+        Instance->VersionMajor = Context->FuseResponse->rsp.init.major;
+        Instance->VersionMinor = Context->FuseResponse->rsp.init.minor;
         // !!!: REVISIT
-        KeSetEvent(&DeviceExtension->InitEvent, 1, FALSE);
+        KeSetEvent(&Instance->InitEvent, 1, FALSE);
 
         Context->InternalResponse->IoStatus.Status = STATUS_SUCCESS;
     }
@@ -174,17 +175,24 @@ static BOOLEAN FuseOpReserved_Destroy(FUSE_CONTEXT *Context)
 {
     PAGED_CODE();
 
-    return FALSE;
+    coro_block (Context->CoroState)
+    {
+        coro_await (FuseProtoSendDestroy(Context));
+
+        Context->InternalResponse->IoStatus.Status = STATUS_SUCCESS;
+    }
+
+    return coro_active();
 }
 
 static BOOLEAN FuseOpReserved_Forget(FUSE_CONTEXT *Context)
 {
     PAGED_CODE();
 
-    FUSE_DEVICE_EXTENSION *DeviceExtension = FuseDeviceExtension(Context->DeviceObject);
+    FUSE_INSTANCE *Instance = Context->Instance;
 
     ASSERT(!IsListEmpty(&Context->Forget.ForgetList));
-    if (16 > DeviceExtension->VersionMinor ||
+    if (16 > Instance->VersionMinor ||
         &Context->Forget.ForgetList == Context->Forget.ForgetList.Flink->Flink ||
         DEBUGTEST(10))
         FuseProtoFillForget(Context);
@@ -221,7 +229,7 @@ static VOID FuseLookup(FUSE_CONTEXT *Context)
 
     coro_block (Context->CoroState)
     {
-        if (!FuseCacheGetEntry(FuseDeviceExtension(Context->DeviceObject)->Cache,
+        if (!FuseCacheGetEntry(Context->Instance->Cache,
             Context->Lookup.Ino, &Context->Lookup.Name, Entry, &CacheItem))
         {
             if (FUSE_PROTO_ROOT_INO == Context->Lookup.Ino &&
@@ -249,7 +257,7 @@ static VOID FuseLookup(FUSE_CONTEXT *Context)
             }
 
             FuseCacheSetEntry(
-                FuseDeviceExtension(Context->DeviceObject)->Cache,
+                Context->Instance->Cache,
                 Context->Lookup.Ino, &Context->Lookup.Name, Entry, &CacheItem);
         }
 
@@ -355,7 +363,7 @@ static VOID FusePrepareLookupPath(FUSE_CONTEXT *Context)
     if (0 != FileName)
     {
         Context->InternalResponse->IoStatus.Status = FuseCacheReferenceGen(
-            FuseDeviceExtension(Context->DeviceObject)->Cache, &CacheGen);
+            Context->Instance->Cache, &CacheGen);
         if (!NT_SUCCESS(Context->InternalResponse->IoStatus.Status))
             goto exit;
 
@@ -411,7 +419,7 @@ exit:
     {
         FspPosixDeletePath(PosixPath);
             /* handles NULL paths */
-        FuseCacheDereferenceGen(FuseDeviceExtension(Context->DeviceObject)->Cache, CacheGen);
+        FuseCacheDereferenceGen(Context->Instance->Cache, CacheGen);
             /* handles NULL gens */
     }
 }
@@ -464,13 +472,13 @@ static VOID FusePrepareLookupPath_ContextFini(FUSE_CONTEXT *Context)
 
     if (FspFsctlTransactCreateKind == Context->InternalRequest->Kind &&
         0 != Context->File)
-        FuseFileDelete(Context->DeviceObject, Context->File);
+        FuseFileDelete(Context->Instance, Context->File);
 
     FspPosixDeletePath(Context->LookupPath.OrigPath2.Buffer);
         /* handles NULL paths */
     FspPosixDeletePath(Context->LookupPath.OrigPath.Buffer);
         /* handles NULL paths */
-    FuseCacheDereferenceGen(FuseDeviceExtension(Context->DeviceObject)->Cache, Context->LookupPath.CacheGen);
+    FuseCacheDereferenceGen(Context->Instance->Cache, Context->LookupPath.CacheGen);
         /* handles NULL gens */
 }
 
@@ -768,7 +776,7 @@ static VOID FuseCreate(FUSE_CONTEXT *Context)
 
     coro_block (Context->CoroState)
     {
-        Context->InternalResponse->IoStatus.Status = FuseFileCreate(Context->DeviceObject, &Context->File);
+        Context->InternalResponse->IoStatus.Status = FuseFileCreate(Context->Instance, &Context->File);
         if (!NT_SUCCESS(Context->InternalResponse->IoStatus.Status))
             coro_break;
 
@@ -800,7 +808,7 @@ static VOID FuseCreate(FUSE_CONTEXT *Context)
                 coro_break;
 
             FuseCacheSetEntry(
-                FuseDeviceExtension(Context->DeviceObject)->Cache,
+                Context->Instance->Cache,
                 Context->LookupPath.Ino, &Context->LookupPath.Name,
                 &Context->FuseResponse->rsp.mkdir.entry,
                 &Context->LookupPath.CacheItem);
@@ -819,7 +827,7 @@ static VOID FuseCreate(FUSE_CONTEXT *Context)
             Context->File->Fh = Context->FuseResponse->rsp.open.fh;
             Context->File->IsDirectory = TRUE;
             Context->File->CacheItem = Context->LookupPath.CacheItem;
-            FuseCacheReferenceItem(FuseDeviceExtension(Context->DeviceObject)->Cache,
+            FuseCacheReferenceItem(Context->Instance->Cache,
                 Context->File->CacheItem);
         }
         else
@@ -828,7 +836,7 @@ static VOID FuseCreate(FUSE_CONTEXT *Context)
             if (NT_SUCCESS(Context->InternalResponse->IoStatus.Status))
             {
                 FuseCacheSetEntry(
-                    FuseDeviceExtension(Context->DeviceObject)->Cache,
+                    Context->Instance->Cache,
                     Context->LookupPath.Ino, &Context->LookupPath.Name,
                     &Context->FuseResponse->rsp.create.entry,
                     &Context->LookupPath.CacheItem);
@@ -841,7 +849,7 @@ static VOID FuseCreate(FUSE_CONTEXT *Context)
                 Context->File->Ino = Context->LookupPath.Ino;
                 Context->File->Fh = Context->FuseResponse->rsp.create.fh;
                 Context->File->CacheItem = Context->LookupPath.CacheItem;
-                FuseCacheReferenceItem(FuseDeviceExtension(Context->DeviceObject)->Cache,
+                FuseCacheReferenceItem(Context->Instance->Cache,
                     Context->File->CacheItem);
             }
             else
@@ -854,7 +862,7 @@ static VOID FuseCreate(FUSE_CONTEXT *Context)
                     coro_break;
 
                 FuseCacheSetEntry(
-                    FuseDeviceExtension(Context->DeviceObject)->Cache,
+                    Context->Instance->Cache,
                     Context->LookupPath.Ino, &Context->LookupPath.Name,
                     &Context->FuseResponse->rsp.mknod.entry,
                     &Context->LookupPath.CacheItem);
@@ -872,14 +880,14 @@ static VOID FuseCreate(FUSE_CONTEXT *Context)
                 Context->File->Ino = Context->LookupPath.Ino;
                 Context->File->Fh = Context->FuseResponse->rsp.open.fh;
                 Context->File->CacheItem = Context->LookupPath.CacheItem;
-                FuseCacheReferenceItem(FuseDeviceExtension(Context->DeviceObject)->Cache,
+                FuseCacheReferenceItem(Context->Instance->Cache,
                     Context->File->CacheItem);
             }
         }
 
         Context->InternalResponse->Rsp.Create.Opened.UserContext2 =
             (UINT64)(UINT_PTR)Context->File;
-        FuseAttrToFileInfo(Context->DeviceObject, &Context->LookupPath.Attr,
+        FuseAttrToFileInfo(Context->Instance, &Context->LookupPath.Attr,
             &Context->InternalResponse->Rsp.Create.Opened.FileInfo);
         Context->InternalResponse->Rsp.Create.Opened.DisableCache =
             Context->LookupPath.DisableCache;
@@ -904,7 +912,7 @@ static VOID FuseCreate(FUSE_CONTEXT *Context)
                 STATUS_INVALID_DEVICE_REQUEST != Context->InternalResponse->IoStatus.Status)
                 goto cleanup;
 
-            FuseAttrToFileInfo(Context->DeviceObject, &Context->FuseResponse->rsp.setattr.attr,
+            FuseAttrToFileInfo(Context->Instance, &Context->FuseResponse->rsp.setattr.attr,
                 &Context->InternalResponse->Rsp.Create.Opened.FileInfo);
         }
 
@@ -930,7 +938,7 @@ static VOID FuseOpen(FUSE_CONTEXT *Context)
 
     coro_block (Context->CoroState)
     {
-        Context->InternalResponse->IoStatus.Status = FuseFileCreate(Context->DeviceObject, &Context->File);
+        Context->InternalResponse->IoStatus.Status = FuseFileCreate(Context->Instance, &Context->File);
         if (!NT_SUCCESS(Context->InternalResponse->IoStatus.Status))
             coro_break;
 
@@ -1003,12 +1011,12 @@ static VOID FuseOpen(FUSE_CONTEXT *Context)
         }
 
         Context->File->CacheItem = Context->LookupPath.CacheItem;
-        FuseCacheReferenceItem(FuseDeviceExtension(Context->DeviceObject)->Cache,
+        FuseCacheReferenceItem(Context->Instance->Cache,
             Context->File->CacheItem);
 
         Context->InternalResponse->Rsp.Create.Opened.UserContext2 =
             (UINT64)(UINT_PTR)Context->File;
-        FuseAttrToFileInfo(Context->DeviceObject, &Context->LookupPath.Attr,
+        FuseAttrToFileInfo(Context->Instance, &Context->LookupPath.Attr,
             &Context->InternalResponse->Rsp.Create.Opened.FileInfo);
         Context->InternalResponse->Rsp.Create.Opened.DisableCache =
             Context->LookupPath.DisableCache;
@@ -1245,10 +1253,10 @@ static BOOLEAN FuseOpOverwrite(FUSE_CONTEXT *Context)
         if (!NT_SUCCESS(Context->InternalResponse->IoStatus.Status))
             coro_break;
 
-        FuseCacheQuickExpireItem(FuseDeviceExtension(Context->DeviceObject)->Cache,
+        FuseCacheQuickExpireItem(Context->Instance->Cache,
             Context->File->CacheItem);
 
-        FuseAttrToFileInfo(Context->DeviceObject, &Context->FuseResponse->rsp.getattr.attr,
+        FuseAttrToFileInfo(Context->Instance, &Context->FuseResponse->rsp.getattr.attr,
             &Context->InternalResponse->Rsp.Overwrite.FileInfo);
 
         Context->InternalResponse->IoStatus.Status = STATUS_SUCCESS;
@@ -1285,7 +1293,7 @@ static BOOLEAN FuseOpCleanup(FUSE_CONTEXT *Context)
                 coro_await (FuseProtoSendUnlink(Context));
 
             FuseCacheRemoveEntry(
-                FuseDeviceExtension(Context->DeviceObject)->Cache,
+                Context->Instance->Cache,
                 Context->Lookup.Ino, &Context->Lookup.Name);
 
             Context->InternalResponse->IoStatus.Status = STATUS_SUCCESS;
@@ -1342,7 +1350,7 @@ static VOID FuseOpClose_ContextFini(FUSE_CONTEXT *Context)
     PAGED_CODE();
 
     if (0 != Context->File)
-        FuseFileDelete(Context->DeviceObject, Context->File);
+        FuseFileDelete(Context->Instance, Context->File);
 }
 
 static BOOLEAN FuseOpRead(FUSE_CONTEXT *Context)
@@ -1365,9 +1373,9 @@ static BOOLEAN FuseOpRead(FUSE_CONTEXT *Context)
                 Context->Read.Length = 512;
 #endif
 #if 0
-            FUSE_DEVICE_EXTENSION *DeviceExtension = FuseDeviceExtension(Context->DeviceObject);
-            if (Context->Read.Length > DeviceExtension->VolumeParams.MaxRead)
-                Context->Read.Length = DeviceExtension->VolumeParams.MaxRead;
+            FUSE_DEVICE_EXTENSION *Instance = FuseDeviceExtension(Context->DeviceObject);
+            if (Context->Read.Length > Instance->VolumeParams.MaxRead)
+                Context->Read.Length = Instance->VolumeParams.MaxRead;
 #endif
 
             coro_await (FuseProtoSendRead(Context));
@@ -1424,7 +1432,7 @@ static BOOLEAN FuseOpWrite(FUSE_CONTEXT *Context)
         {
             if (Context->Write.StartOffset >= Context->Write.Attr.size)
             {
-                FuseAttrToFileInfo(Context->DeviceObject, &Context->Write.Attr,
+                FuseAttrToFileInfo(Context->Instance, &Context->Write.Attr,
                     &Context->InternalResponse->Rsp.Write.FileInfo);
                 Context->InternalResponse->IoStatus.Status = STATUS_SUCCESS;
                 Context->InternalResponse->IoStatus.Information = 0;
@@ -1483,10 +1491,10 @@ static BOOLEAN FuseOpWrite(FUSE_CONTEXT *Context)
         if (Context->Write.Attr.size < Context->Write.StartOffset + Context->Write.Offset)
             Context->Write.Attr.size = Context->Write.StartOffset + Context->Write.Offset;
 
-        FuseCacheQuickExpireItem(FuseDeviceExtension(Context->DeviceObject)->Cache,
+        FuseCacheQuickExpireItem(Context->Instance->Cache,
             Context->File->CacheItem);
 
-        FuseAttrToFileInfo(Context->DeviceObject, &Context->Write.Attr,
+        FuseAttrToFileInfo(Context->Instance, &Context->Write.Attr,
             &Context->InternalResponse->Rsp.Write.FileInfo);
 
         Context->InternalResponse->IoStatus.Status = STATUS_SUCCESS;
@@ -1508,7 +1516,7 @@ static BOOLEAN FuseOpQueryInformation(FUSE_CONTEXT *Context)
         if (!NT_SUCCESS(Context->InternalResponse->IoStatus.Status))
             coro_break;
 
-        FuseAttrToFileInfo(Context->DeviceObject, &Context->FuseResponse->rsp.getattr.attr,
+        FuseAttrToFileInfo(Context->Instance, &Context->FuseResponse->rsp.getattr.attr,
             &Context->InternalResponse->Rsp.QueryInformation.FileInfo);
 
         Context->InternalResponse->IoStatus.Status = STATUS_SUCCESS;
@@ -1548,10 +1556,10 @@ static BOOLEAN FuseOpSetInformation_SetBasicInfo(FUSE_CONTEXT *Context)
         if (!NT_SUCCESS(Context->InternalResponse->IoStatus.Status))
             coro_break;
 
-        FuseCacheQuickExpireItem(FuseDeviceExtension(Context->DeviceObject)->Cache,
+        FuseCacheQuickExpireItem(Context->Instance->Cache,
             Context->File->CacheItem);
 
-        FuseAttrToFileInfo(Context->DeviceObject, &Context->FuseResponse->rsp.getattr.attr,
+        FuseAttrToFileInfo(Context->Instance, &Context->FuseResponse->rsp.getattr.attr,
             &Context->InternalResponse->Rsp.SetInformation.FileInfo);
 
         Context->InternalResponse->IoStatus.Status = STATUS_SUCCESS;
@@ -1586,10 +1594,10 @@ static BOOLEAN FuseOpSetInformation_SetAllocationSize(FUSE_CONTEXT *Context)
                 coro_break;
         }
 
-        FuseCacheQuickExpireItem(FuseDeviceExtension(Context->DeviceObject)->Cache,
+        FuseCacheQuickExpireItem(Context->Instance->Cache,
             Context->File->CacheItem);
 
-        FuseAttrToFileInfo(Context->DeviceObject, &Context->FuseResponse->rsp.getattr.attr,
+        FuseAttrToFileInfo(Context->Instance, &Context->FuseResponse->rsp.getattr.attr,
             &Context->InternalResponse->Rsp.SetInformation.FileInfo);
 
         Context->InternalResponse->IoStatus.Status = STATUS_SUCCESS;
@@ -1616,10 +1624,10 @@ static BOOLEAN FuseOpSetInformation_SetFileSize(FUSE_CONTEXT *Context)
         if (!NT_SUCCESS(Context->InternalResponse->IoStatus.Status))
             coro_break;
 
-        FuseCacheQuickExpireItem(FuseDeviceExtension(Context->DeviceObject)->Cache,
+        FuseCacheQuickExpireItem(Context->Instance->Cache,
             Context->File->CacheItem);
 
-        FuseAttrToFileInfo(Context->DeviceObject, &Context->FuseResponse->rsp.getattr.attr,
+        FuseAttrToFileInfo(Context->Instance, &Context->FuseResponse->rsp.getattr.attr,
             &Context->InternalResponse->Rsp.SetInformation.FileInfo);
 
         Context->InternalResponse->IoStatus.Status = STATUS_SUCCESS;
@@ -1692,6 +1700,8 @@ static BOOLEAN FuseOpSetInformation_SetDelete(FUSE_CONTEXT *Context)
 
 static BOOLEAN FuseOpSetInformation_Rename(FUSE_CONTEXT *Context)
 {
+    PAGED_CODE();
+
     coro_block (Context->CoroState)
     {
         Context->File = (PVOID)(UINT_PTR)Context->InternalRequest->Req.SetInformation.UserContext2;
@@ -1722,7 +1732,7 @@ static BOOLEAN FuseOpSetInformation_Rename(FUSE_CONTEXT *Context)
         FusePosixPathSuffix(&Context->LookupPath.OrigPath, 0, &Context->LookupPath.Name);
 
         if (!Context->LookupPath.RenameIsNonExistent &&
-            (FuseDeviceExtension(Context->DeviceObject)->VolumeParams->CaseSensitiveSearch ||
+            (Context->Instance->VolumeParams->CaseSensitiveSearch ||
                 Context->LookupPath.Ino != Context->LookupPath.Ino2 ||
                 !RtlEqualString(&Context->LookupPath.Name, &Context->LookupPath.Name2, TRUE)))
         {
@@ -1744,11 +1754,11 @@ static BOOLEAN FuseOpSetInformation_Rename(FUSE_CONTEXT *Context)
             coro_break;
 
         FuseCacheRemoveEntry(
-            FuseDeviceExtension(Context->DeviceObject)->Cache,
+            Context->Instance->Cache,
             Context->LookupPath.Ino, &Context->LookupPath.Name);
 
         FuseCacheRemoveEntry(
-            FuseDeviceExtension(Context->DeviceObject)->Cache,
+            Context->Instance->Cache,
             Context->LookupPath.Ino2, &Context->LookupPath.Name2);
 
         Context->InternalResponse->IoStatus.Status = STATUS_SUCCESS;
@@ -1846,10 +1856,10 @@ static BOOLEAN FuseOpFlushBuffers(FUSE_CONTEXT *Context)
         if (!NT_SUCCESS(Context->InternalResponse->IoStatus.Status))
             coro_break;
 
-        FuseCacheQuickExpireItem(FuseDeviceExtension(Context->DeviceObject)->Cache,
+        FuseCacheQuickExpireItem(Context->Instance->Cache,
             Context->File->CacheItem);
 
-        FuseAttrToFileInfo(Context->DeviceObject, &Context->FuseResponse->rsp.getattr.attr,
+        FuseAttrToFileInfo(Context->Instance, &Context->FuseResponse->rsp.getattr.attr,
             &Context->InternalResponse->Rsp.FlushBuffers.FileInfo);
 
         Context->InternalResponse->IoStatus.Status = STATUS_SUCCESS;
@@ -1917,7 +1927,7 @@ static BOOLEAN FuseAddDirInfo(FUSE_CONTEXT *Context,
 
             DirInfo = Buffer;
             DirInfo->Size = (UINT16)DirInfoSize;
-            FuseAttrToFileInfo(Context->DeviceObject, Attr, &DirInfo->FileInfo);
+            FuseAttrToFileInfo(Context->Instance, Attr, &DirInfo->FileInfo);
             DirInfo->NextOffset = NextOffset;
             RtlCopyMemory(DirInfo->FileNameBuf, WideName, WideNameLength);
         }
@@ -2134,7 +2144,7 @@ static BOOLEAN FuseOpQueryDirectory(FUSE_CONTEXT *Context)
         Context->File = (PVOID)(UINT_PTR)Context->InternalRequest->Req.QueryDirectory.UserContext2;
 
         Context->InternalResponse->IoStatus.Status = FuseCacheReferenceGen(
-            FuseDeviceExtension(Context->DeviceObject)->Cache, &Context->QueryDirectory.CacheGen);
+            Context->Instance->Cache, &Context->QueryDirectory.CacheGen);
         if (!NT_SUCCESS(Context->InternalResponse->IoStatus.Status))
             coro_break;
 
@@ -2157,7 +2167,7 @@ static VOID FuseOpQueryDirectory_ContextFini(FUSE_CONTEXT *Context)
 
     FspPosixDeletePath(Context->QueryDirectory.OrigName.Buffer);
         /* handles NULL paths */
-    FuseCacheDereferenceGen(FuseDeviceExtension(Context->DeviceObject)->Cache, Context->QueryDirectory.CacheGen);
+    FuseCacheDereferenceGen(Context->Instance->Cache, Context->QueryDirectory.CacheGen);
         /* handles NULL gens */
 }
 

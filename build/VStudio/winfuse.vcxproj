@@ -71,28 +71,28 @@
     <OutDir>$(SolutionDir)build\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)build\$(ProjectName).build\$(Configuration)\$(PlatformTarget)\</IntDir>
     <EnableInf2cat>false</EnableInf2cat>
-    <TargetName>$(SolutionName)-$(PlatformTarget)</TargetName>
+    <TargetName>$(ProjectName)-$(PlatformTarget)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <OutDir>$(SolutionDir)build\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)build\$(ProjectName).build\$(Configuration)\$(PlatformTarget)\</IntDir>
     <EnableInf2cat>false</EnableInf2cat>
-    <TargetName>$(SolutionName)-$(PlatformTarget)</TargetName>
+    <TargetName>$(ProjectName)-$(PlatformTarget)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <OutDir>$(SolutionDir)build\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)build\$(ProjectName).build\$(Configuration)\$(PlatformTarget)\</IntDir>
     <EnableInf2cat>false</EnableInf2cat>
-    <TargetName>$(SolutionName)-$(PlatformTarget)</TargetName>
+    <TargetName>$(ProjectName)-$(PlatformTarget)</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <OutDir>$(SolutionDir)build\$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)build\$(ProjectName).build\$(Configuration)\$(PlatformTarget)\</IntDir>
     <EnableInf2cat>false</EnableInf2cat>
-    <TargetName>$(SolutionName)-$(PlatformTarget)</TargetName>
+    <TargetName>$(ProjectName)-$(PlatformTarget)</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -140,21 +140,24 @@
     <FilesToPackage Include="$(TargetPath)" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\src\winfuse\cache.c" />
-    <ClCompile Include="..\..\src\winfuse\debug.c" />
+    <ClCompile Include="..\..\src\shared\km\cache.c" />
+    <ClCompile Include="..\..\src\shared\km\context.c" />
+    <ClCompile Include="..\..\src\shared\km\debug.c" />
+    <ClCompile Include="..\..\src\shared\km\file.c" />
+    <ClCompile Include="..\..\src\shared\km\fuseop.c" />
+    <ClCompile Include="..\..\src\shared\km\instance.c" />
+    <ClCompile Include="..\..\src\shared\km\ioq.c" />
+    <ClCompile Include="..\..\src\shared\km\path.c" />
+    <ClCompile Include="..\..\src\shared\km\proto.c" />
+    <ClCompile Include="..\..\src\shared\km\util.c" />
     <ClCompile Include="..\..\src\winfuse\driver.c" />
-    <ClCompile Include="..\..\src\winfuse\file.c" />
-    <ClCompile Include="..\..\src\winfuse\fuse.c" />
-    <ClCompile Include="..\..\src\winfuse\fuseop.c" />
-    <ClCompile Include="..\..\src\winfuse\ioq.c" />
-    <ClCompile Include="..\..\src\winfuse\path.c" />
-    <ClCompile Include="..\..\src\winfuse\proto.c" />
-    <ClCompile Include="..\..\src\winfuse\util.c" />
+    <ClCompile Include="..\..\src\winfuse\device.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\src\winfuse\coro.h" />
+    <ClInclude Include="..\..\src\shared\km\coro.h" />
+    <ClInclude Include="..\..\src\shared\km\proto.h" />
+    <ClInclude Include="..\..\src\shared\km\shared.h" />
     <ClInclude Include="..\..\src\winfuse\driver.h" />
-    <ClInclude Include="..\..\src\winfuse\proto.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\..\src\winfuse\version.rc" />
@@ -162,66 +165,66 @@
   <ItemGroup>
     <CustomBuild Include="..\..\src\winfuse\driver.inf.in">
       <FileType>Document</FileType>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Writing driver-$(PlatformTarget).inf</Message>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Writing $(TargetName).inf</Message>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</LinkObjects>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Writing driver-$(PlatformTarget).inf</Message>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Writing $(TargetName).inf</Message>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</LinkObjects>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Writing driver-$(PlatformTarget).inf</Message>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Writing $(TargetName).inf</Message>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Writing driver-$(PlatformTarget).inf</Message>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Writing $(TargetName).inf</Message>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)driver-$(PlatformTarget).inf</Outputs>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)driver-$(PlatformTarget).inf</Outputs>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)driver-$(PlatformTarget).inf</Outputs>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)driver-$(PlatformTarget).inf</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)$(TargetName).inf</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)$(TargetName).inf</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(OutDir)$(TargetName).inf</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(OutDir)$(TargetName).inf</Outputs>
       <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">set DriverFile=$(TargetFileName)
 set Provider="$(MyCompanyName)"
-set CatalogFile=driver-$(PlatformTarget).cat
+set CatalogFile=$(TargetName).cat
 
 setlocal EnableDelayedExpansion
-if exist $(OutDir)driver-$(PlatformTarget).inf del $(OutDir)driver-$(PlatformTarget).inf
+if exist $(OutDir)$(TargetName).inf del $(OutDir)$(TargetName).inf
 for /f "delims=" %%l in (%(FullPath)) do (
     set line=%%l
-    echo !line! &gt;&gt;$(OutDir)driver-$(PlatformTarget).inf
+    echo !line! &gt;&gt;$(OutDir)$(TargetName).inf
 )
 
-stampinf -d * -v $(MyVersion) -f $(OutDir)driver-$(PlatformTarget).inf</Command>
+stampinf -d * -v $(MyVersion) -f $(OutDir)$(TargetName).inf</Command>
       <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">set DriverFile=$(TargetFileName)
 set Provider="$(MyCompanyName)"
-set CatalogFile=driver-$(PlatformTarget).cat
+set CatalogFile=$(TargetName).cat
 
 setlocal EnableDelayedExpansion
-if exist $(OutDir)driver-$(PlatformTarget).inf del $(OutDir)driver-$(PlatformTarget).inf
+if exist $(OutDir)$(TargetName).inf del $(OutDir)$(TargetName).inf
 for /f "delims=" %%l in (%(FullPath)) do (
     set line=%%l
-    echo !line! &gt;&gt;$(OutDir)driver-$(PlatformTarget).inf
+    echo !line! &gt;&gt;$(OutDir)$(TargetName).inf
 )
 
-stampinf -d * -v $(MyVersion) -f $(OutDir)driver-$(PlatformTarget).inf</Command>
+stampinf -d * -v $(MyVersion) -f $(OutDir)$(TargetName).inf</Command>
       <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">set DriverFile=$(TargetFileName)
 set Provider="$(MyCompanyName)"
-set CatalogFile=driver-$(PlatformTarget).cat
+set CatalogFile=$(TargetName).cat
 
 setlocal EnableDelayedExpansion
-if exist $(OutDir)driver-$(PlatformTarget).inf del $(OutDir)driver-$(PlatformTarget).inf
+if exist $(OutDir)$(TargetName).inf del $(OutDir)$(TargetName).inf
 for /f "delims=" %%l in (%(FullPath)) do (
     set line=%%l
-    echo !line! &gt;&gt;$(OutDir)driver-$(PlatformTarget).inf
+    echo !line! &gt;&gt;$(OutDir)$(TargetName).inf
 )
 
-stampinf -d * -v $(MyVersion) -f $(OutDir)driver-$(PlatformTarget).inf</Command>
+stampinf -d * -v $(MyVersion) -f $(OutDir)$(TargetName).inf</Command>
       <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">set DriverFile=$(TargetFileName)
 set Provider="$(MyCompanyName)"
-set CatalogFile=driver-$(PlatformTarget).cat
+set CatalogFile=$(TargetName).cat
 
 setlocal EnableDelayedExpansion
-if exist $(OutDir)driver-$(PlatformTarget).inf del $(OutDir)driver-$(PlatformTarget).inf
+if exist $(OutDir)$(TargetName).inf del $(OutDir)$(TargetName).inf
 for /f "delims=" %%l in (%(FullPath)) do (
     set line=%%l
-    echo !line! &gt;&gt;$(OutDir)driver-$(PlatformTarget).inf
+    echo !line! &gt;&gt;$(OutDir)$(TargetName).inf
 )
 
-stampinf -d * -v $(MyVersion) -f $(OutDir)driver-$(PlatformTarget).inf</Command>
+stampinf -d * -v $(MyVersion) -f $(OutDir)$(TargetName).inf</Command>
     </CustomBuild>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

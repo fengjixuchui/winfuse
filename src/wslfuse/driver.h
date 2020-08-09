@@ -1,5 +1,5 @@
 /**
- * @file winfuse-tests.c
+ * @file wslfuse/driver.h
  *
  * @copyright 2019-2020 Bill Zissimopoulos
  */
@@ -19,18 +19,14 @@
  * associated repository.
  */
 
-#include <winfsp/winfsp.h>
-#include <tlib/testsuite.h>
+#ifndef WSLFUSE_DRIVER_H_INCLUDED
+#define WSLFUSE_DRIVER_H_INCLUDED
 
-int main(int argc, char *argv[])
-{
-    FspLoad(0);
+#include <shared/km/shared.h>
+#include <shared/ku/wslfuse.h>
+#include <lxdk/lxdk.h>
 
-    TESTSUITE(coro_tests);
-    TESTSUITE(path_tests);
-    TESTSUITE(transact_tests);
+INT FuseMiscRegister(PLX_INSTANCE Instance);
+VOID FuseMiscInitialize(VOID);
 
-    tlib_run_tests(argc, argv);
-
-    return 0;
-}
+#endif

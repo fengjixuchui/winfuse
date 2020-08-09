@@ -3,17 +3,40 @@
 setlocal
 setlocal EnableDelayedExpansion
 
-set CONFIG=Debug
-set SUFFIX=x64
-set TARGET_MACHINE=WIN10DBG
-if not X%1==X set TARGET_MACHINE=%1
-set TARGET_ACCOUNT=\Users\%USERNAME%\Downloads\winfuse\
-set TARGET=\\%TARGET_MACHINE%%TARGET_ACCOUNT%
+set Config=Debug
+set Suffix=x64
+set Deploy=C:\Deploy\winfuse
+set Target=Win10DBG
+set Chkpnt=winfuse
+if not X%1==X set Target=%1
+if not X%2==X set Chkpnt=%2
 
-cd %~dp0..
+(
+    echo sc create WinFsp type=filesys binPath=%%~dp0winfsp-%SUFFIX%.sys
+    echo sc create LxLdr type=kernel binPath=%%~dp0lxldr.sys
+    echo sc create WinFuse type=kernel binPath=%%~dp0winfuse-%SUFFIX%.sys
+    echo sc create WslFuse type=kernel binPath=%%~dp0wslfuse-%SUFFIX%.sys
+    echo reg add HKLM\Software\WinFsp\Fsext /v 00093118 /d "winfuse" /f /reg:32
+    echo reg add HKLM\Software\LxDK\Services\wslfuse /f
+    echo sc start winfsp
+    echo sc start lxldr
+) >%~dp0..\build\VStudio\build\%Config%\deploy-setup.bat
 
-if exist ext\winfsp\build\VStudio\build\%CONFIG% (
-    set WINFSP=!cd!\ext\winfsp\build\VStudio\build\%CONFIG%\
+(set LF=^
+%=this line is empty=%
+)
+(
+    set /p =sudo mknod /dev/fuse c 10 229!LF!
+    set /p =sudo chmod a+w /dev/fuse!LF!
+    set /p =sudo cp fusermount.out /usr/bin/fusermount!LF!
+    set /p =sudo cp fusermount.out /usr/bin/fusermount3!LF!
+    set /p =sudo cp fusermount-helper.exe /usr/bin/fusermount-helper.exe!LF!
+    set /p =sudo chmod u+s /usr/bin/fusermount!LF!
+    set /p =sudo chmod u+s /usr/bin/fusermount3!LF!
+) <nul >%~dp0..\build\VStudio\build\%Config%\deploy-setup.sh
+
+if exist %~dp0..\ext\winfsp\build\VStudio\build\%Config% (
+    set WINFSP=%~dp0..\ext\winfsp\build\VStudio\build\%Config%\
 ) else (
     set RegKey="HKLM\SOFTWARE\WinFsp"
     set RegVal="InstallDir"
@@ -26,31 +49,56 @@ if exist ext\winfsp\build\VStudio\build\%CONFIG% (
     if not exist "!WINFSP!" (echo cannot find WinFsp installation >&2 & goto fail)
 )
 
-mkdir %TARGET% 2>nul
-for %%f in (winfuse-%SUFFIX%.sys winfuse-tests-%SUFFIX%.exe) do (
-    copy build\VStudio\build\%CONFIG%\%%f %TARGET% >nul
+if exist %~dp0..\ext\lxdk\build\VStudio\build\%Config% (
+    set LXDK=%~dp0..\ext\lxdk\build\VStudio\build\%Config%\
+) else (
+    set RegKey="HKLM\SOFTWARE\LxDK"
+    set RegVal="InstallDir"
+    reg query !RegKey! /v !RegVal! >nul 2>&1
+    if !ERRORLEVEL! equ 0 (
+        for /f "tokens=2,*" %%i in ('reg query !RegKey! /v !RegVal! ^| findstr !RegVal!') do (
+            set LXDK=%%jbin\
+        )
+    )
+    if not exist "!LXDK!" (echo cannot find LxDK installation >&2 & goto fail)
 )
-for %%f in (winfsp-%SUFFIX%.sys winfsp-%SUFFIX%.dll winfsp-tests-%SUFFIX%.exe) do (
-    copy "!WINFSP!%%f" %TARGET% >nul
+
+set MEMFS_FUSE3_EXE=
+if exist %~dp0..\tst\memfs-fuse3\build\%Config%\memfs-fuse3-x64.exe (
+    set MEMFS_FUSE3_EXE=memfs-fuse3-x64.exe fuse3-x64.dll
 )
-if exist tst\memfs-fuse3\build\%CONFIG% (
-    for %%f in (memfs-fuse3-%SUFFIX%.exe fuse3-%SUFFIX%.dll) do (
-        copy tst\memfs-fuse3\build\%CONFIG%\%%f %TARGET% >nul
+set MEMFS_FUSE3_OUT=
+if exist %~dp0..\tst\memfs-fuse3\build\%Config%\memfs-fuse3.out (
+    set MEMFS_FUSE3_OUT=memfs-fuse3.out
+)
+
+set Files=
+for %%f in (
+    %~dp0..\build\VStudio\build\%Config%\
+        winfuse-%Suffix%.sys
+        wslfuse-%Suffix%.sys
+        winfuse-tests-%Suffix%.exe
+        wslfuse-tests.out
+        fusermount.out
+        fusermount-helper.exe
+        deploy-setup.bat
+        deploy-setup.sh
+    %~dp0..\tst\memfs-fuse3\build\%Config%\
+        !MEMFS_FUSE3_EXE!
+        !MEMFS_FUSE3_OUT!
+    "!WINFSP!"
+        winfsp-%Suffix%.sys
+        winfsp-%Suffix%.dll
+    "!LXDK!"
+        lxldr.sys
+    ) do (
+    set File=%%~f
+    if [!File:~-1!] == [\] (
+        set Dir=!File!
+    ) else (
+        if not [!Files!] == [] set Files=!Files!,
+        set Files=!Files!'!Dir!!File!'
     )
 )
-if exist tst\lockdly\lockdly.exe (
-    copy tst\lockdly\lockdly.exe %TARGET% >nul
-)
-if exist ext\winfsp\ext\test\fstools\src\fsx\fsx.exe (
-    copy ext\winfsp\ext\test\fstools\src\fsx\fsx.exe %TARGET% >nul
-)
 
-echo sc delete WinFsp                                                            >%TARGET%kminst.bat
-echo sc delete WinFuse                                                          >>%TARGET%kminst.bat
-echo sc create WinFsp type=filesys binPath=%%~dp0winfsp-%SUFFIX%.sys            >>%TARGET%kminst.bat
-echo sc create WinFuse type=kernel binPath=%%~dp0winfuse-%SUFFIX%.sys           >>%TARGET%kminst.bat
-echo reg add HKLM\Software\WinFsp\Fsext /v 00093118 /d "winfuse" /f /reg:32     >>%TARGET%kminst.bat
-exit /b 0
-
-:fail
-exit /b 1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%~dp0deploy.ps1' -Name '%Target%' -CheckpointName '%Chkpnt%' -Files !Files! -Destination '%Deploy%'"

@@ -1,5 +1,5 @@
 /**
- * @file winfuse-tests.c
+ * @file wslfuse-tests.c
  *
  * @copyright 2019-2020 Bill Zissimopoulos
  */
@@ -19,16 +19,11 @@
  * associated repository.
  */
 
-#include <winfsp/winfsp.h>
 #include <tlib/testsuite.h>
 
 int main(int argc, char *argv[])
 {
-    FspLoad(0);
-
-    TESTSUITE(coro_tests);
-    TESTSUITE(path_tests);
-    TESTSUITE(transact_tests);
+    TESTSUITE(mount_tests);
 
     tlib_run_tests(argc, argv);
 

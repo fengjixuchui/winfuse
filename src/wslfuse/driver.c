@@ -1,5 +1,5 @@
 /**
- * @file winfuse-tests.c
+ * @file wslfuse/driver.c
  *
  * @copyright 2019-2020 Bill Zissimopoulos
  */
@@ -19,18 +19,24 @@
  * associated repository.
  */
 
-#include <winfsp/winfsp.h>
-#include <tlib/testsuite.h>
+#include <wslfuse/driver.h>
 
-int main(int argc, char *argv[])
+DRIVER_INITIALIZE DriverEntry;
+
+#ifdef ALLOC_PRAGMA
+#pragma alloc_text(INIT, DriverEntry)
+#endif
+
+NTSTATUS DriverEntry(
+    PDRIVER_OBJECT DriverObject,
+    PUNICODE_STRING RegistryPath)
 {
-    FspLoad(0);
+#if DBG
+    if (!KD_DEBUGGER_NOT_PRESENT)
+        DbgBreakPoint();
+#endif
 
-    TESTSUITE(coro_tests);
-    TESTSUITE(path_tests);
-    TESTSUITE(transact_tests);
+    FuseMiscInitialize();
 
-    tlib_run_tests(argc, argv);
-
-    return 0;
+    return LxldrRegisterService(DriverObject, TRUE, FuseMiscRegister);
 }

@@ -5,29 +5,35 @@ image: Visual Studio 2019
 environment:
   matrix:
   - CONFIGURATION: Debug
-    WINFSP: stable
+    WINFSP: rel
+    LXDK: rel
   - CONFIGURATION: Release
-    WINFSP: stable
+    WINFSP: rel
+    LXDK: rel
 
 init:
 #- ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
-#- bcdedit -debug on
 
 install:
 - git submodule update --init --recursive
-# install Meson & Ninja
-- appveyor AddMessage "Install Meson & Ninja" -Category Information
-- appveyor DownloadFile https://github.com/mesonbuild/meson/releases/download/0.52.0/meson-0.52.0-64.msi
-- for %%f in ("meson-*.msi") do start /wait msiexec /i %%f /qn
 # install WinFsp
 - appveyor AddMessage "Install WinFsp" -Category Information
-- if %WINFSP%==stable appveyor DownloadFile https://github.com/billziss-gh/winfsp/releases/download/v1.5/winfsp-1.5.20002.msi
-- if %WINFSP%==stable appveyor DownloadFile https://github.com/billziss-gh/winfsp/releases/download/v1.5/winfsp-tests-1.5.20002.zip
-- if %WINFSP%==source tools\build-winfsp.bat %CONFIGURATION%
-- if %WINFSP%==source copy ext\winfsp\build\VStudio\build\%CONFIGURATION%\winfsp-*.msi .
-- if %WINFSP%==source copy ext\winfsp\build\VStudio\build\%CONFIGURATION%\winfsp-tests-*.zip .
+- if %WINFSP%==rel appveyor DownloadFile https://github.com/billziss-gh/winfsp/releases/download/v1.8B2/winfsp-1.8.20221.msi
+- if %WINFSP%==rel appveyor DownloadFile https://github.com/billziss-gh/winfsp/releases/download/v1.8B2/winfsp-tests-1.8.20221.zip
+- if %WINFSP%==src tools\build-winfsp.bat %CONFIGURATION%
+- if %WINFSP%==src copy ext\winfsp\build\VStudio\build\%CONFIGURATION%\winfsp-*.msi .
+- if %WINFSP%==src copy ext\winfsp\build\VStudio\build\%CONFIGURATION%\winfsp-tests-*.zip .
 - for %%f in ("winfsp-*.msi") do start /wait msiexec /i %%f /qn INSTALLLEVEL=1000
 - for %%f in ("winfsp-tests-*.zip") do powershell -command "Expand-Archive -Path %%f -DestinationPath 'C:\Program Files (x86)\WinFsp\bin'"
+# install LxDK
+- appveyor AddMessage "Install LxDK" -Category Information
+- if %LXDK%==rel appveyor DownloadFile https://github.com/billziss-gh/lxdk/releases/download/v0.2/lxdk-0.2.20209.msi
+- if %LXDK%==src tools\build-lxdk.bat %CONFIGURATION%
+- if %LXDK%==src copy ext\lxdk\build\VStudio\build\%CONFIGURATION%\lxdk-*.msi .
+- for %%f in ("lxdk-*.msi") do start /wait msiexec /i %%f /qn INSTALLLEVEL=1000
+# install WSL tools
+- appveyor AddMessage "Install WSL tools" -Category Information
+- wsl -- sudo apt-get update; sudo apt-get install -y g++ gdb make ninja-build rsync zip libfuse3-dev
 # enable test-signing and verifier and reboot
 - appveyor AddMessage "Change boot configuration and reboot" -Category Information
 - bcdedit /set testsigning on
