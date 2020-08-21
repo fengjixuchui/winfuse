@@ -32,13 +32,15 @@ set opt_tests=^
     sample-fsx0-memfs-fuse3-x86 ^
     sample-fsx1-memfs-fuse3-x86 ^
     sample-fsxinf-memfs-fuse3-x86 ^
-    sample-build-memfs-fuse3-wsl ^
-    sample-test0-memfs-fuse3-wsl ^
-    sample-test1-memfs-fuse3-wsl ^
-    sample-testinf-memfs-fuse3-wsl ^
-    sample-fsx0-memfs-fuse3-wsl ^
-    sample-fsx1-memfs-fuse3-wsl ^
-    sample-fsxinf-memfs-fuse3-wsl
+    sample-build-memfs-fuse3-wsl
+
+REM disable WSL tests that do not pass on AppVeyor (because it uses old Windows/WSL build)
+REM sample-test0-memfs-fuse3-wsl ^
+REM sample-test1-memfs-fuse3-wsl ^
+REM sample-testinf-memfs-fuse3-wsl ^
+REM sample-fsx0-memfs-fuse3-wsl ^
+REM sample-fsx1-memfs-fuse3-wsl ^
+REM sample-fsxinf-memfs-fuse3-wsl
 
 set tests=
 for %%f in (%dfl_tests%) do (
@@ -253,7 +255,7 @@ exit /b 0
 
 :__run_sample_wsl_test
 set TestExit=0
-start "" /b /d "%TMP%\%1\build\%Configuration%" wsl -- sh "/mnt/c/Program Files/WinFuse/opt/wslfuse/install.sh"; mkdir -p mnt; ./%1.out -f -ocontext=FileInfoTimeout=%2,context=Volume=L: mnt
+start "" /b /d "%TMP%\%1\build\%Configuration%" wsl -- sudo sh "/mnt/c/Program Files/WinFuse/opt/wslfuse/install.sh"; mkdir -p mnt; ./%1.out -f -ocontext=FileInfoTimeout=%2,context=Volume=L: mnt
 waitfor 7BF47D72F6664550B03248ECFE77C7DD /t 10 2>nul
 pushd >nul
 cd L: >nul 2>nul || (echo Unable to find drive L: >&2 & goto fail)
@@ -294,7 +296,7 @@ exit /b 0
 
 :__run_sample_fsx_wsl_test
 set TestExit=0
-start "" /b /d "%TMP%\%1\build\%Configuration%" wsl -- sh "/mnt/c/Program Files/WinFuse/opt/wslfuse/install.sh"; mkdir -p mnt; ./%1.out -f -ocontext=FileInfoTimeout=%2,context=Volume=L: mnt
+start "" /b /d "%TMP%\%1\build\%Configuration%" wsl -- sudo sh "/mnt/c/Program Files/WinFuse/opt/wslfuse/install.sh"; mkdir -p mnt; ./%1.out -f -ocontext=FileInfoTimeout=%2,context=Volume=L: mnt
 waitfor 7BF47D72F6664550B03248ECFE77C7DD /t 10 2>nul
 pushd >nul
 cd L: >nul 2>nul || (echo Unable to find drive L: >&2 & goto fail)
